@@ -1,61 +1,86 @@
-import React, { useState } from 'react';
-import { Eye, FileText } from 'lucide-react';
-import PdfViewer from '../components/PdfViewer.jsx';
+import React, { useState, useEffect } from 'react';
+import { getNotes, getFile } from '../lib/storage';
+import { FileText, Eye, ArrowLeft } from 'lucide-react';
+import PdfViewer from '../components/PdfViewer';
 
-export default function Notes({ subjects }) {
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id);
-  const [active, setActive] = useState(null);
-  const subject = subjects.find((s) => s.id === subjectId) || subjects[0];
+export default function Notes() {
+  const [notes, setNotes] = useState([]);
+  const [activePdfUrl, setActivePdfUrl] = useState('');
+  const [loadingId, setLoadingId] = useState(null);
 
-  if (!subject) return <p className="text-center text-slate-500 py-20">目前還沒有任何筆記。</p>;
+  useEffect(() => {
+    setNotes(getNotes() || []);
+  }, []);
+
+  const handleOpenPdf = async (noteId) => {
+    try {
+      setLoadingId(noteId);
+      const pdfData = await getFile(noteId);
+      setLoadingId(null);
+      if (pdfData) {
+        setActivePdfUrl(pdfData);
+      } else {
+        alert('無法讀取該 PDF 檔案資料，請嘗試重新上傳。');
+      }
+    } catch (err) {
+      setLoadingId(null);
+      console.error('開啟 PDF 失敗:', err);
+      alert('讀取 PDF 檔案發生錯誤');
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">PDF 筆記</h1>
-
-      <div className="flex flex-wrap gap-2">
-        {subjects.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setSubjectId(s.id)}
-            className={`px-3 py-1.5 rounded-lg border text-sm ${
-              s.id === subject.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {s.icon} {s.name}
-            <span className="ml-1.5 opacity-70">{s.notes.length}</span>
-          </button>
-        ))}
+      <div>
+        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">PDF 筆記中心</h1>
+        <p className="text-gray-600 dark:text-gray-300 mt-1">線上閱讀與複習課程重點筆記</p>
       </div>
 
-      {subject.notes.length === 0 ? (
-        <p className="text-sm text-slate-500 bg-white border border-slate-200 rounded-xl p-8 text-center">這個科目還沒有筆記。</p>
+      {activePdfUrl ? (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setActivePdfUrl('')}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft className="w-4 h-4" /> 返回筆記列表
+          </button>
+          <PdfViewer fileUrl={activePdfUrl} />
+        </div>
       ) : (
-        <div className="space-y-3">
-          {subject.notes.map((n) => (
-            <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <FileText className="w-8 h-8 text-rose-500 shrink-0" />
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-slate-900 truncate">{n.title}</h3>
-                  <p className="text-xs text-slate-500 truncate">
-                    {n.description ? `${n.description}　` : ''}
-                    {n.date}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setActive(n)}
-                className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-sm font-medium shrink-0"
-              >
-                <Eye className="w-4 h-4" /> 閱讀
-              </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {notes.length === 0 ? (
+            <div className="col-span-full text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 dark:text-gray-400">目前尚無上傳的筆記檔案</p>
             </div>
-          ))}
+          ) : (
+            notes.map((note) => (
+              <div
+                key={note.id}
+                className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-lg flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-2">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 inline-block">
+                    {note.subject}
+                  </span>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">{note.title}</h3>
+                  <p className="text-xs text-gray-400">發布日期：{note.date}</p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={loadingId === note.id}
+                  onClick={() => handleOpenPdf(note.id)}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-md shadow-blue-500/20"
+                >
+                  <Eye className="w-4 h-4" /> {loadingId === note.id ? '載入檔案中...' : '線上閱讀筆記'}
+                </button>
+              </div>
+            ))
+          )}
         </div>
       )}
-
-      {active && <PdfViewer note={active} onClose={() => setActive(null)} />}
     </div>
   );
 }

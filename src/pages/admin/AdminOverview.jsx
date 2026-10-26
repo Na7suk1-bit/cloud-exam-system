@@ -1,75 +1,80 @@
-import React from 'react';
-import { RotateCcw, Info } from 'lucide-react';
-import { PageTitle, ghostBtn } from './AdminShared.jsx';
-import { SEED_SUBJECTS } from '../../lib/seed.js';
-import { deleteFile } from '../../lib/storage.js';
+import React, { useState, useEffect } from 'react';
+import { getSubjects, getQuestions, getNotes, getQuizHistory } from '../../lib/storage';
+import { BookOpen, HelpCircle, FileText, History } from 'lucide-react';
 
-export default function AdminOverview({ subjects, setSubjects, notify }) {
-  const totalQ = subjects.reduce((n, s) => n + s.questions.length, 0);
-  const totalN = subjects.reduce((n, s) => n + s.notes.length, 0);
+export default function AdminOverview() {
+  const [stats, setStats] = useState({
+    subjectsCount: 0,
+    questionsCount: 0,
+    notesCount: 0,
+    historyCount: 0,
+  });
 
-  const reset = () => {
-    if (!window.confirm('這會刪除目前所有科目、題目與已上傳的 PDF，還原成預設範例資料。確定嗎？')) return;
-    subjects.forEach((s) => s.notes.forEach((n) => n.fileId && deleteFile(n.fileId)));
-    setSubjects(SEED_SUBJECTS);
-    notify('已還原預設資料');
-  };
+  useEffect(() => {
+    try {
+      const subjects = getSubjects() || [];
+      const questions = getQuestions() || [];
+      const notes = getNotes() || [];
+      const history = getQuizHistory() || [];
+
+      setStats({
+        subjectsCount: Array.isArray(subjects) ? subjects.length : 0,
+        questionsCount: Array.isArray(questions) ? questions.length : 0,
+        notesCount: Array.isArray(notes) ? notes.length : 0,
+        historyCount: Array.isArray(history) ? history.length : 0,
+      });
+    } catch (e) {
+      console.error('Error loading overview stats:', e);
+    }
+  }, []);
 
   return (
-    <div>
-      <PageTitle title="總覽" desc={`${subjects.length} 個科目、${totalQ} 題、${totalN} 份筆記`} />
-
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-left">
-            <tr>
-              <th className="px-4 py-2 font-medium">科目</th>
-              <th className="px-4 py-2 font-medium">是非</th>
-              <th className="px-4 py-2 font-medium">選擇</th>
-              <th className="px-4 py-2 font-medium">申論</th>
-              <th className="px-4 py-2 font-medium">筆記</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subjects.map((s) => (
-              <tr key={s.id} className="border-t border-slate-100">
-                <td className="px-4 py-2.5 font-medium text-slate-800">
-                  {s.icon} {s.name}
-                </td>
-                {['tf', 'mc', 'essay'].map((t) => (
-                  <td key={t} className="px-4 py-2.5 text-slate-600">
-                    {s.questions.filter((q) => q.type === t).length}
-                  </td>
-                ))}
-                <td className="px-4 py-2.5 text-slate-600">{s.notes.length}</td>
-              </tr>
-            ))}
-            {subjects.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                  還沒有科目
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">系統總覽概況</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">查看目前測驗系統的各項數據統計與營運狀態</p>
       </div>
 
-      <div className="mt-6 flex gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
-        <Info className="w-5 h-5 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-medium">資料目前存在這台電腦的瀏覽器裡</p>
-          <p>
-            題庫存於 localStorage、PDF 存於 IndexedDB。你在這裡的修改只有這個瀏覽器看得到，學生從別的裝置開啟不會同步，清除瀏覽器資料也會一併消失。
-            要讓所有人看到同一份內容，需要接上 Firebase（專案已安裝）或其他後端。
-          </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">總科目數</p>
+            <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1">{stats.subjectsCount}</h3>
+          </div>
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/40 rounded-xl text-blue-600 dark:text-blue-400">
+            <BookOpen className="w-6 h-6" />
+          </div>
         </div>
-      </div>
 
-      <div className="mt-6">
-        <button onClick={reset} className={ghostBtn}>
-          <RotateCcw className="w-4 h-4" /> 還原預設範例資料
-        </button>
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">總題庫數</p>
+            <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1">{stats.questionsCount}</h3>
+          </div>
+          <div className="p-3 bg-green-50 dark:bg-green-900/40 rounded-xl text-green-600 dark:text-green-400">
+            <HelpCircle className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">PDF 筆記數量</p>
+            <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1">{stats.notesCount}</h3>
+          </div>
+          <div className="p-3 bg-purple-50 dark:bg-purple-900/40 rounded-xl text-purple-600 dark:text-purple-400">
+            <FileText className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">累計測驗次數</p>
+            <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-1">{stats.historyCount}</h3>
+          </div>
+          <div className="p-3 bg-amber-50 dark:bg-amber-900/40 rounded-xl text-amber-600 dark:text-amber-400">
+            <History className="w-6 h-6" />
+          </div>
+        </div>
       </div>
     </div>
   );

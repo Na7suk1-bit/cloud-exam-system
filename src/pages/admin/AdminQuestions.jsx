@@ -1,220 +1,192 @@
-import React, { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, X as XIcon } from 'lucide-react';
-import Modal from '../../components/Modal.jsx';
-import { TypeBadge } from '../../components/QuestionParts.jsx';
-import { TYPE_LABEL, uid } from '../../lib/questions.js';
-import { NoSubject, PageTitle, SubjectSelect, ghostBtn, inputCls, primaryBtn } from './AdminShared.jsx';
+import React, { useState, useEffect } from 'react';
+import { getSubjects, getQuestions, saveQuestions } from '../../lib/storage';
+import { Plus, Trash2, HelpCircle } from 'lucide-react';
 
-function QuestionForm({ initial, onSave, onCancel }) {
-  const [type, setType] = useState(initial?.type || 'mc');
-  const [question, setQuestion] = useState(initial?.question || '');
-  const [options, setOptions] = useState(initial?.type === 'mc' ? initial.options : ['', '', '', '']);
-  const [correct, setCorrect] = useState(initial?.type === 'mc' ? Math.max(0, initial.options.indexOf(initial.answer)) : 0);
-  const [tfAnswer, setTfAnswer] = useState(initial?.type === 'tf' ? initial.answer : 'O');
-  const [essayAnswer, setEssayAnswer] = useState(initial?.type === 'essay' ? initial.answer : '');
-  const [keywords, setKeywords] = useState((initial?.keywords || []).join('、'));
-  const [explanation, setExplanation] = useState(initial?.explanation || '');
-  const [error, setError] = useState('');
+export default function AdminQuestions() {
+  const [subjects, setSubjects] = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
 
-  const removeOption = (i) => {
-    setOptions((o) => o.filter((_, j) => j !== i));
-    setCorrect((c) => (i === c ? 0 : i < c ? c - 1 : c));
-  };
+  // 新增題目表單欄位
+  const [type, setType] = useState('single');
+  const [title, setTitle] = useState('');
+  const [optionA, setOptionA] = useState('');
+  const [optionB, setOptionB] = useState('');
+  const [optionC, setOptionC] = useState('');
+  const [optionD, setOptionD] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [explanation, setExplanation] = useState('');
 
-  const save = () => {
-    if (!question.trim()) return setError('請填寫題目文字');
-    const base = { id: initial?.id || uid('q'), type, question: question.trim(), explanation: explanation.trim() };
+  useEffect(() => {
+    const subs = getSubjects() || [];
+    const qList = getQuestions() || [];
+    setSubjects(subs);
+    setQuestions(qList);
+    if (subs.length > 0) setSelectedSubjectId(subs[0].id);
+  }, []);
 
-    if (type === 'tf') return onSave({ ...base, options: ['O', 'X'], answer: tfAnswer });
-
-    if (type === 'mc') {
-      const cleaned = options.map((o) => o.trim());
-      if (cleaned.filter(Boolean).length < 2) return setError('選擇題至少要有 2 個選項');
-      if (!cleaned[correct]) return setError('標示為正解的選項不能是空白');
-      const kept = cleaned.filter(Boolean);
-      return onSave({ ...base, options: kept, answer: cleaned[correct] });
+  const handleAddQuestion = (e) => {
+    e.preventDefault();
+    if (!title.trim() || !selectedSubjectId) {
+      alert('請填寫完整題目資訊！');
+      return;
     }
 
-    if (!essayAnswer.trim()) return setError('請填寫標準答案');
-    const kw = keywords.split(/[,，、\n]/).map((k) => k.trim()).filter(Boolean);
-    return onSave({ ...base, options: [], answer: essayAnswer.trim(), keywords: kw });
+    const options = (type === 'single' || type === 'multiple') 
+      ? [optionA, optionB, optionC, optionD].filter(Boolean)
+      : [];
+
+    const newQ = {
+      id: `q-${Date.now()}`,
+      subjectId: selectedSubjectId,
+      type,
+      title,
+      options,
+      answer: answer.trim(),
+      explanation: explanation.trim(),
+    };
+
+    const updated = [newQ, ...questions];
+    setQuestions(updated);
+    saveQuestions(updated);
+
+    // 重置
+    setTitle('');
+    setOptionA('');
+    setOptionB('');
+    setOptionC('');
+    setOptionD('');
+    setAnswer('');
+    setExplanation('');
+    alert('題目新增成功！');
   };
+
+  const handleDeleteQuestion = (id) => {
+    if (confirm('確定要刪除這題嗎？')) {
+      const updated = questions.filter((q) => q.id !== id);
+      setQuestions(updated);
+      saveQuestions(updated);
+    }
+  };
+
+  const filteredQuestions = questions.filter((q) => q.subjectId === selectedSubjectId);
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        {Object.entries(TYPE_LABEL).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setType(k)}
-            className={`px-3 py-1.5 rounded-lg border text-sm ${type === k ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">題庫管理中心</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">管理各考科之單選、複選、申論與計算題庫</p>
       </div>
 
-      <label className="block text-sm text-slate-600">
-        題目
-        <textarea rows={3} value={question} onChange={(e) => setQuestion(e.target.value)} className={`${inputCls} mt-1`} />
-      </label>
-
-      {type === 'tf' && (
-        <fieldset className="text-sm text-slate-600">
-          <legend className="mb-1">正確答案</legend>
-          <div className="flex gap-4">
-            {['O', 'X'].map((v) => (
-              <label key={v} className="flex items-center gap-1.5">
-                <input type="radio" name="tf" checked={tfAnswer === v} onChange={() => setTfAnswer(v)} /> {v}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      )}
-
-      {type === 'mc' && (
-        <fieldset className="text-sm text-slate-600 space-y-2">
-          <legend className="mb-1">選項（選取圓點表示正解）</legend>
-          {options.map((o, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input type="radio" name="correct" checked={correct === i} onChange={() => setCorrect(i)} aria-label={`選項 ${i + 1} 為正解`} />
-              <span className="w-5 text-slate-400">{String.fromCharCode(65 + i)}</span>
-              <input value={o} onChange={(e) => setOptions((arr) => arr.map((x, j) => (j === i ? e.target.value : x)))} className={inputCls} />
-              {options.length > 2 && (
-                <button type="button" onClick={() => removeOption(i)} className="text-slate-400 hover:text-rose-600" aria-label="移除選項">
-                  <XIcon className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          ))}
-          {options.length < 8 && (
-            <button type="button" onClick={() => setOptions((o) => [...o, ''])} className="text-indigo-700 hover:underline">
-              ＋ 新增選項
-            </button>
-          )}
-        </fieldset>
-      )}
-
-      {type === 'essay' && (
-        <>
-          <label className="block text-sm text-slate-600">
-            標準答案
-            <textarea rows={4} value={essayAnswer} onChange={(e) => setEssayAnswer(e.target.value)} className={`${inputCls} mt-1`} />
-          </label>
-          <label className="block text-sm text-slate-600">
-            評分關鍵字（用頓號或逗號分隔）
-            <input value={keywords} onChange={(e) => setKeywords(e.target.value)} className={`${inputCls} mt-1`} />
-          </label>
-        </>
-      )}
-
-      <label className="block text-sm text-slate-600">
-        解析
-        <textarea rows={3} value={explanation} onChange={(e) => setExplanation(e.target.value)} className={`${inputCls} mt-1`} />
-      </label>
-
-      {error && <p className="text-sm text-rose-600">{error}</p>}
-      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-        <button onClick={onCancel} className={ghostBtn}>
-          取消
-        </button>
-        <button onClick={save} className={primaryBtn}>
-          儲存題目
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function AdminQuestions({ subjects, subjectId, setAdminSubjectId, updateSubject, notify }) {
-  const subject = subjects.find((s) => s.id === subjectId);
-  const [editing, setEditing] = useState(null); // null | 'new' | question
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-
-  const rows = useMemo(() => {
-    if (!subject) return [];
-    const kw = search.trim().toLowerCase();
-    return subject.questions
-      .map((q, i) => ({ q, n: i + 1 }))
-      .filter(({ q }) => (typeFilter === 'all' || q.type === typeFilter) && (!kw || q.question.toLowerCase().includes(kw)));
-  }, [subject, search, typeFilter]);
-
-  if (!subject) return <NoSubject />;
-
-  const save = (q) => {
-    updateSubject(subject.id, (s) => {
-      const exists = s.questions.some((x) => x.id === q.id);
-      return { ...s, questions: exists ? s.questions.map((x) => (x.id === q.id ? q : x)) : [...s.questions, q] };
-    });
-    setEditing(null);
-    notify('題目已儲存');
-  };
-
-  const remove = (q) => {
-    if (!window.confirm('確定刪除這一題嗎？')) return;
-    updateSubject(subject.id, (s) => ({ ...s, questions: s.questions.filter((x) => x.id !== q.id) }));
-    notify('已刪除題目');
-  };
-
-  return (
-    <div>
-      <PageTitle title="編輯題目" desc={`${subject.name} 共 ${subject.questions.length} 題`}>
-        <div className="flex gap-2">
-          <SubjectSelect subjects={subjects} value={subject.id} onChange={setAdminSubjectId} />
-          <button onClick={() => setEditing('new')} className={primaryBtn}>
-            <Plus className="w-4 h-4" /> 新增題目
-          </button>
-        </div>
-      </PageTitle>
-
-      <div className="flex flex-wrap gap-2 mb-4">
-        <div className="relative flex-1 min-w-[12rem]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜尋題目文字" className={`${inputCls} pl-9`} />
-        </div>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={`${inputCls} w-auto`} aria-label="題型篩選">
-          <option value="all">全部題型</option>
-          {Object.entries(TYPE_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
+      {/* 科目選擇器 */}
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center gap-4">
+        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">選擇管理科目：</label>
+        <select
+          value={selectedSubjectId}
+          onChange={(e) => setSelectedSubjectId(e.target.value)}
+          className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        >
+          {subjects.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
       </div>
 
-      <div className="space-y-2">
-        {rows.map(({ q, n }) => (
-          <div key={q.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-sm text-slate-400 w-7 shrink-0 pt-0.5">{n}</span>
-            <div className="min-w-0 flex-1 space-y-1">
-              <TypeBadge type={q.type} />
-              <p className="text-sm text-slate-900 line-clamp-2 whitespace-pre-line">{q.question}</p>
-              <p className="text-xs text-slate-500 truncate">答案：{q.answer}</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={() => setEditing(q)} className={ghostBtn} aria-label="編輯題目">
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button onClick={() => remove(q)} className={`${ghostBtn} hover:text-rose-600`} aria-label="刪除題目">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+      {/* 新增題目表單 */}
+      <form onSubmit={handleAddQuestion} className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md space-y-4">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+          <Plus className="w-5 h-5 text-blue-500" /> 手動建立新題目
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">題目類型</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="single">單選題</option>
+              <option value="multiple">複選題</option>
+              <option value="essay">申論題</option>
+              <option value="calculation">計算題</option>
+            </select>
           </div>
-        ))}
-        {rows.length === 0 && (
-          <p className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">
-            {subject.questions.length === 0 ? '這個科目還沒有題目。可以按「新增題目」，或到「匯入題庫」一次匯入。' : '沒有符合條件的題目。'}
-          </p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">答案 / 參考解答</label>
+            <input
+              type="text"
+              required
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder={type === 'single' ? '例如: A' : '請輸入正確答案或對照解答'}
+              className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">題目敘述</label>
+          <textarea
+            required
+            rows={3}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="請輸入題目內容..."
+            className="w-full p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+        </div>
+
+        {(type === 'single' || type === 'multiple') && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input type="text" placeholder="選項 A" value={optionA} onChange={(e) => setOptionA(e.target.value)} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            <input type="text" placeholder="選項 B" value={optionB} onChange={(e) => setOptionB(e.target.value)} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            <input type="text" placeholder="選項 C" value={optionC} onChange={(e) => setOptionC(e.target.value)} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            <input type="text" placeholder="選項 D" value={optionD} onChange={(e) => setOptionD(e.target.value)} className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">題目解析</label>
+          <input
+            type="text"
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value)}
+            placeholder="請輸入詳細解題步驟或補充說明 (選填)"
+            className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+        </div>
+
+        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-xl transition-colors">
+          新增題目
+        </button>
+      </form>
+
+      {/* 題目列表 */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md p-6 space-y-4">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200">
+          目前該科目題目列表 ({filteredQuestions.length})
+        </h3>
+        {filteredQuestions.length === 0 ? (
+          <p className="text-gray-500 text-sm">該科目尚無題目。</p>
+        ) : (
+          <div className="space-y-3">
+            {filteredQuestions.map((q, idx) => (
+              <div key={q.id} className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 space-y-2">
+                <div className="flex justify-between items-start">
+                  <span className="font-bold text-gray-900 dark:text-white">{idx + 1}. {q.title}</span>
+                  <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-600 hover:bg-red-50 p-1 rounded-lg">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold">類型：{q.type} | 答案：{q.answer}</p>
+                {q.explanation && <p className="text-xs text-gray-500">解析：{q.explanation}</p>}
+              </div>
+            ))}
+          </div>
         )}
       </div>
-
-      {editing && (
-        <Modal title={editing === 'new' ? '新增題目' : '編輯題目'} onClose={() => setEditing(null)} size="max-w-2xl">
-          <QuestionForm initial={editing === 'new' ? null : editing} onSave={save} onCancel={() => setEditing(null)} />
-        </Modal>
-      )}
     </div>
   );
 }

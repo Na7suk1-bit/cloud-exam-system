@@ -1,0 +1,35 @@
+type User @table {
+  username: String!
+  email: String!
+  avatarUrl: String
+  createdAt: Timestamp
+}
+
+type Quiz @table {
+  title: String!
+  category: String!
+  description: String
+  isPublic: Boolean
+  creator: User!
+}
+
+type Question @table {
+  text: String!
+  correctAnswer: String!
+  options: String! # Stored as a JSON string
+  pointValue: Int
+  quiz: Quiz!
+}
+
+type Attempt @table {
+  user: User!
+  quiz: Quiz!
+  score: Int!
+  completedAt: Timestamp
+}
+
+type Favorite @table {
+  user: User!
+  quiz: Quiz!
+  createdAt: Timestamp
+}

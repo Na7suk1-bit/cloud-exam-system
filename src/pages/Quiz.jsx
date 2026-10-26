@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getQuestions, saveQuizHistory } from '../lib/storage';
-import { CheckCircle2, XCircle, ArrowRight, ArrowLeft, Send, Eye } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Send, Eye } from 'lucide-react';
 
 export default function Quiz({ subjectId, config, onFinish }) {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
-  const [showAnswerState, setShowAnswerState] = useState({}); // 記錄是否點擊查看答案
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showAnswerState, setShowAnswerState] = useState({});
 
   useEffect(() => {
     let list = getQuestions().filter((q) => q.subjectId === subjectId);
@@ -39,7 +38,6 @@ export default function Quiz({ subjectId, config, onFinish }) {
   const isEssayOrCalc = currentQ.type === 'essay' || currentQ.type === 'calculation';
 
   const handleSelectOption = (optionKey) => {
-    if (isSubmitted) return;
     if (currentQ.type === 'multiple') {
       const prev = userAnswers[currentQ.id] || [];
       const updated = prev.includes(optionKey)
@@ -63,20 +61,21 @@ export default function Quiz({ subjectId, config, onFinish }) {
   };
 
   const handleSubmit = () => {
-    setIsSubmitted(true);
-    // 計算成績 (申論與計算題不自動評分對錯)
     let score = 0;
     let choiceCount = 0;
 
     questions.forEach((q) => {
       if (q.type === 'single') {
         choiceCount++;
-        if (userAnswers[q.id] === q.answer) score++;
+        const uStr = String(userAnswers[q.id] || '').trim().toUpperCase();
+        const qStr = String(q.answer || '').trim().toUpperCase();
+        if (uStr === qStr) score++;
       } else if (q.type === 'multiple') {
         choiceCount++;
-        const uAns = (userAnswers[q.id] || []).sort().join(',');
-        const qAns = Array.isArray(q.answer) ? q.answer.sort().join(',') : q.answer;
-        if (uAns === qAns) score++;
+        const uAns = userAnswers[q.id] || [];
+        const uStr = Array.isArray(uAns) ? [...uAns].sort().join(',') : uAns;
+        const qStr = Array.isArray(q.answer) ? [...q.answer].sort().join(',') : q.answer;
+        if (uStr === qStr) score++;
       }
     });
 
@@ -98,32 +97,30 @@ export default function Quiz({ subjectId, config, onFinish }) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* 進度條 */}
       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 font-medium">
         <span>題目 {currentIndex + 1} / {questions.length}</span>
-        <span>題型：{isEssayOrCalc ? '申論 / 計算題 (參考答案)' : '選擇題'}</span>
+        <span>題型：{isEssayOrCalc ? '申論 / 計算題' : '選擇題'}</span>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-100 dark:border-gray-700 space-y-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-100 dark:border-gray-700 space-y-6 transition-colors">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
           {currentIndex + 1}. {currentQ.title}
         </h2>
 
-        {/* 答題區域 */}
         {isEssayOrCalc ? (
           <div className="space-y-4">
             <textarea
               rows={5}
               value={userAnswers[currentQ.id] || ''}
               onChange={(e) => handleTextChange(e.target.value)}
-              placeholder="請在此輸入您的計算過程或作答內容..."
+              placeholder="請在此輸入您的計算過程或答題內容..."
               className="w-full p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         ) : (
           <div className="space-y-3">
             {currentQ.options?.map((opt, idx) => {
-              const optKey = String.fromCharCode(65 + idx); // A, B, C, D
+              const optKey = String.fromCharCode(65 + idx);
               const isSelected = currentQ.type === 'multiple'
                 ? (userAnswers[currentQ.id] || []).includes(optKey)
                 : userAnswers[currentQ.id] === optKey;
@@ -131,6 +128,7 @@ export default function Quiz({ subjectId, config, onFinish }) {
               return (
                 <button
                   key={optKey}
+                  type="button"
                   onClick={() => handleSelectOption(optKey)}
                   className={`w-full text-left p-4 rounded-xl border transition-all flex items-start gap-3 ${
                     isSelected
@@ -146,10 +144,10 @@ export default function Quiz({ subjectId, config, onFinish }) {
           </div>
         )}
 
-        {/* 答案與解析展示 (當下顯示模式 或 點擊查看參考答案) */}
         {(config?.showAnswerMode === 'immediate' || isEssayOrCalc) && (
           <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
             <button
+              type="button"
               onClick={toggleShowAnswer}
               className="text-sm font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline"
             >
@@ -172,9 +170,9 @@ export default function Quiz({ subjectId, config, onFinish }) {
           </div>
         )}
 
-        {/* 切換按鈕 */}
         <div className="flex justify-between pt-4">
           <button
+            type="button"
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex((i) => i - 1)}
             className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-30 flex items-center gap-1"
@@ -184,6 +182,7 @@ export default function Quiz({ subjectId, config, onFinish }) {
 
           {currentIndex < questions.length - 1 ? (
             <button
+              type="button"
               onClick={() => setCurrentIndex((i) => i + 1)}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium flex items-center gap-1"
             >
@@ -191,8 +190,9 @@ export default function Quiz({ subjectId, config, onFinish }) {
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleSubmit}
-              className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold flex items-center gap-1"
+              className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold flex items-center gap-1 shadow-lg shadow-green-500/20"
             >
               <Send className="w-4 h-4" /> 交卷結算
             </button>

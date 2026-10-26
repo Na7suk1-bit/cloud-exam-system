@@ -1,106 +1,92 @@
-import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react';
-import { PageTitle, inputCls, primaryBtn, ghostBtn } from './AdminShared.jsx';
-import { uid } from '../../lib/questions.js';
-import { deleteFile } from '../../lib/storage.js';
+import React, { useState, useEffect } from 'react';
+import { getSubjects, saveSubjects } from '../../lib/storage';
+import { Plus, Trash2, FolderTree, BookOpen } from 'lucide-react';
 
-const EMPTY = { name: '', icon: '📚', description: '' };
+export default function AdminSubjects() {
+  const [subjects, setSubjects] = useState([]);
+  const [name, setName] = useState('');
 
-export default function AdminSubjects({ subjects, setSubjects, updateSubject, setAdminSubjectId, notify }) {
-  const [draft, setDraft] = useState(EMPTY);
-  const [editId, setEditId] = useState(null);
-  const [edit, setEdit] = useState(EMPTY);
+  useEffect(() => {
+    setSubjects(getSubjects() || []);
+  }, []);
 
-  const add = (e) => {
+  const handleAddSubject = (e) => {
     e.preventDefault();
-    if (!draft.name.trim()) return notify('請填寫科目名稱', 'err');
-    const s = { id: uid('s'), name: draft.name.trim(), icon: draft.icon.trim() || '📚', description: draft.description.trim(), questions: [], notes: [] };
-    setSubjects((list) => [...list, s]);
-    setAdminSubjectId(s.id);
-    setDraft(EMPTY);
-    notify('已新增科目');
+    if (!name.trim()) return;
+
+    const newSubject = {
+      id: `sub-${Date.now()}`,
+      name: name.trim(),
+    };
+
+    const updated = [...subjects, newSubject];
+    setSubjects(updated);
+    saveSubjects(updated);
+    setName('');
   };
 
-  const saveEdit = () => {
-    if (!edit.name.trim()) return notify('科目名稱不能是空的', 'err');
-    updateSubject(editId, (s) => ({ ...s, name: edit.name.trim(), icon: edit.icon.trim() || '📚', description: edit.description.trim() }));
-    setEditId(null);
-    notify('已儲存');
-  };
-
-  const remove = (s) => {
-    if (!window.confirm(`刪除「${s.name}」會一併刪除 ${s.questions.length} 題與 ${s.notes.length} 份筆記，無法復原。確定嗎？`)) return;
-    s.notes.forEach((n) => n.fileId && deleteFile(n.fileId));
-    setSubjects((list) => list.filter((x) => x.id !== s.id));
-    notify('已刪除科目');
+  const handleDeleteSubject = (id) => {
+    if (confirm('確定要刪除此科目嗎？（相關題目將可能無法對應）')) {
+      const updated = subjects.filter((s) => s.id !== id);
+      setSubjects(updated);
+      saveSubjects(updated);
+    }
   };
 
   return (
-    <div>
-      <PageTitle title="科目管理" desc="科目是題庫與筆記的分類，學生會在首頁看到這些科目。" />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">考試科目管理</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">新增或刪除測驗系統中的考試科目類別</p>
+      </div>
 
-      <form onSubmit={add} className="bg-white border border-slate-200 rounded-xl p-4 grid gap-3 sm:grid-cols-[4rem_1fr_2fr_auto] items-end mb-6">
-        <label className="text-xs text-slate-500">
-          圖示
-          <input value={draft.icon} onChange={(e) => setDraft({ ...draft, icon: e.target.value })} className={`${inputCls} mt-1 text-center`} maxLength={4} />
-        </label>
-        <label className="text-xs text-slate-500">
-          科目名稱
-          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="例如：個體經濟學" className={`${inputCls} mt-1`} />
-        </label>
-        <label className="text-xs text-slate-500">
-          簡介（選填）
-          <input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} className={`${inputCls} mt-1`} />
-        </label>
-        <button type="submit" className={primaryBtn}>
-          <Plus className="w-4 h-4" /> 新增科目
+      {/* 新增科目 */}
+      <form onSubmit={handleAddSubject} className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md flex gap-4">
+        <input
+          type="text"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="請輸入新科目名稱 (例如：證券商高級業務員)"
+          className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-xl transition-colors flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" /> 新增科目
         </button>
       </form>
 
-      <div className="space-y-3">
-        {subjects.map((s) =>
-          editId === s.id ? (
-            <div key={s.id} className="bg-white border border-amber-300 rounded-xl p-4 grid gap-3 sm:grid-cols-[4rem_1fr_2fr_auto] items-center">
-              <input value={edit.icon} onChange={(e) => setEdit({ ...edit, icon: e.target.value })} className={`${inputCls} text-center`} maxLength={4} aria-label="圖示" />
-              <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} className={inputCls} aria-label="科目名稱" />
-              <input value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} className={inputCls} aria-label="簡介" />
-              <div className="flex gap-2">
-                <button onClick={saveEdit} className={primaryBtn} aria-label="儲存">
-                  <Check className="w-4 h-4" />
-                </button>
-                <button onClick={() => setEditId(null)} className={ghostBtn} aria-label="取消">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div key={s.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="text-2xl">{s.icon}</span>
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900">{s.name}</p>
-                  <p className="text-xs text-slate-500 truncate">
-                    {s.questions.length} 題・{s.notes.length} 份筆記{s.description ? `　${s.description}` : ''}
-                  </p>
+      {/* 科目列表 */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md p-6">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+          <FolderTree className="w-5 h-5 text-blue-500" /> 現有科目列表 ({subjects.length})
+        </h3>
+
+        {subjects.length === 0 ? (
+          <p className="text-gray-500 text-sm">目前尚無任何科目。</p>
+        ) : (
+          <div className="space-y-3">
+            {subjects.map((sub) => (
+              <div
+                key={sub.id}
+                className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40"
+              >
+                <div className="flex items-center gap-3">
+                  <BookOpen className="w-5 h-5 text-blue-500" />
+                  <span className="font-bold text-gray-900 dark:text-white">{sub.name}</span>
+                  <span className="text-xs text-gray-400">ID: {sub.id}</span>
                 </div>
-              </div>
-              <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={() => {
-                    setEditId(s.id);
-                    setEdit({ name: s.name, icon: s.icon, description: s.description || '' });
-                  }}
-                  className={ghostBtn}
-                  aria-label={`編輯 ${s.name}`}
+                  onClick={() => handleDeleteSubject(sub.id)}
+                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button onClick={() => remove(s)} className={`${ghostBtn} hover:text-rose-600`} aria-label={`刪除 ${s.name}`}>
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-5 h-5" />
                 </button>
               </div>
-            </div>
-          )
+            ))}
+          </div>
         )}
       </div>
     </div>

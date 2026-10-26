@@ -1,0 +1,28 @@
+mutation CreateSeedData @transaction @auth(expr: "auth.token.admin == true") {
+  user_insertMany(data: [
+    { username: "alice", email: "alice@example.com" },
+    { username: "bob", email: "bob@example.com" },
+    { username: "charlie", email: "charlie@example.com" }
+  ])
+  
+  quiz_insertMany(data: [
+    { title: "General Science", category: "Science", creator: { id: "00000000-0000-0000-0000-000000000001" } },
+    { title: "World History", category: "History", creator: { id: "00000000-0000-0000-0000-000000000002" } },
+    { title: "JavaScript Basics", category: "Programming", creator: { id: "00000000-0000-0000-0000-000000000003" } }
+  ])
+
+  question_insertMany(data: [
+    { text: "What is H2O?", correctAnswer: "Water", options: "['Water', 'Fire', 'Air']", quiz: { id: "00000000-0000-0000-0000-000000000001" } },
+    { text: "Who was the first US president?", correctAnswer: "Washington", options: "['Lincoln', 'Washington', 'Jefferson']", quiz: { id: "00000000-0000-0000-0000-000000000002" } },
+    { text: "What is the output of typeof null?", correctAnswer: "object", options: "['null', 'object', 'undefined']", quiz: { id: "00000000-0000-0000-0000-000000000003" } }
+  ])
+
+  attempt_insertMany(data: [
+    { user: { id: "00000000-0000-0000-0000-000000000001" }, quiz: { id: "00000000-0000-0000-0000-000000000001" }, score: 100 },
+    { user: { id: "00000000-0000-0000-0000-000000000002" }, quiz: { id: "00000000-0000-0000-0000-000000000002" }, score: 85 }
+  ])
+
+  favorite_insertMany(data: [
+    { user: { id: "00000000-0000-0000-0000-000000000001" }, quiz: { id: "00000000-0000-0000-0000-000000000003" } }
+  ])
+}
