@@ -1,12 +1,26 @@
+// src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// 優先讀取 Vite 格式，若無則防護
+const supabaseUrl = 
+  import.meta.env.VITE_SUPABASE_URL || 
+  import.meta.env.SUPABASE_URL || 
+  '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseAnonKey = 
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 
+  import.meta.env.SUPABASE_ANON_KEY || 
+  '';
 
-// PDF 檔案上傳至 Supabase Storage (Bucket: pdf_files)
+// 防護機制：只有當網址與 Key 均存在時才初始化
+export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'))
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+// PDF 上傳至 Supabase Storage
 export const uploadPdfToCloud = async (file) => {
+  if (!supabase) return { fileUrl: '', storagePath: '' };
+
   const fileId = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
   const filePath = `notes/${fileId}`;
 
@@ -28,7 +42,7 @@ export const uploadPdfToCloud = async (file) => {
 
 // 刪除 Supabase Storage 上的 PDF 檔案
 export const deletePdfFromCloud = async (storagePath) => {
-  if (!storagePath) return;
+  if (!supabase || !storagePath) return;
   const { error } = await supabase.storage
     .from('pdf_files')
     .remove([storagePath]);
