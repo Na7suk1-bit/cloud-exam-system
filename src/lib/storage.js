@@ -237,3 +237,11 @@ export const saveAdmin = (isAdmin) => {
 export const saveFileToFirebase = uploadPdfToCloud;
 export const deleteFileFromFirebase = deletePdfFromCloud;
 export const getFile = async (url) => url;
+// 管理者驗證相容性介面 (新增這段導出即可修復 AdminLogin.jsx 報錯)
+export function useAuth() {
+  return {
+    isAdminLoggedIn: () => loadAdmin(),
+    loginAdmin: () => saveAdmin(true),
+    logoutAdmin: () => saveAdmin(false),
+  };
+}
