@@ -1,6 +1,5 @@
 // src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
-
 // 優先讀取 Vite 格式，若無則防護
 const supabaseUrl = 
   import.meta.env.VITE_SUPABASE_URL || 
@@ -40,7 +39,7 @@ export const uploadPdfToCloud = async (file) => {
   };
 };
 
-// 刪除 Supabase Storage 上的 PDF 檔案
+// 刪除 Supabase Storage 上的 PDF 檔案 \\
 export const deletePdfFromCloud = async (storagePath) => {
   if (!supabase || !storagePath) return;
   const { error } = await supabase.storage
