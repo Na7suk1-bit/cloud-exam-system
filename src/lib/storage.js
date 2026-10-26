@@ -11,12 +11,6 @@ const KEYS = {
   HISTORY: 'cloud_exam_history',
 };
 
-const defaultSubjectsData = [
-  { id: 'sub-1', name: '金融市場與職業道德' },
-  { id: 'sub-2', name: '證券商業務員' },
-  { id: 'sub-3', name: '期貨商業務員' },
-];
-
 const generateRandomUserId = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let randomStr = '';
@@ -41,81 +35,99 @@ const setItem = (key, value) => {
   } catch (e) {}
 };
 
-// 1. 科目 (Subjects) - 保證同步傳回 Array
+// 1. 科目 (Subjects) - 清空舊預設，純動態讀取
 export const getSubjects = () => {
-  const data = getItem(KEYS.SUBJECTS, null);
-  if (!data || !Array.isArray(data) || data.length === 0) {
-    setItem(KEYS.SUBJECTS, defaultSubjectsData);
-    return defaultSubjectsData;
-  }
-  return data;
+  const data = getItem(KEYS.SUBJECTS, []);
+  return Array.isArray(data) ? data : [];
 };
 export const loadSubjects = getSubjects;
-export const saveSubjects = (subs) => {
+
+export const saveSubjects = async (subs) => {
   setItem(KEYS.SUBJECTS, subs);
   if (supabase) {
-    subs.forEach(s => supabase.from('subjects').upsert({ id: s.id, name: s.name }).catch(() => {}));
+    try {
+      for (const s of subs) {
+        await supabase.from('subjects').upsert({ id: s.id, name: s.name });
+      }
+    } catch (e) {
+      console.warn('saveSubjects 同步提醒:', e);
+    }
   }
 };
 
-// 2. 題目 (Questions) - 保證同步傳回 Array
+// 2. 題目 (Questions) - 預設為 0
 export const getQuestions = () => {
   const data = getItem(KEYS.QUESTIONS, []);
   return Array.isArray(data) ? data : [];
 };
-export const saveQuestions = (qs) => {
+
+export const saveQuestions = async (qs) => {
   setItem(KEYS.QUESTIONS, qs);
   if (supabase) {
-    const formatted = qs.map(q => ({
-      id: String(q.id).startsWith('q-') ? undefined : q.id,
-      subject_id: q.subjectId,
-      type: q.type,
-      title: q.title,
-      options: q.options || [],
-      answer: q.answer,
-      explanation: q.explanation,
-    }));
-    supabase.from('questions').upsert(formatted).catch(() => {});
+    try {
+      const formatted = qs.map((q) => ({
+        id: String(q.id).startsWith('q-') || String(q.id).startsWith('q_') ? undefined : q.id,
+        subject_id: q.subjectId,
+        type: q.type,
+        title: q.title,
+        options: q.options || [],
+        answer: Array.isArray(q.answer) ? JSON.stringify(q.answer) : String(q.answer),
+        explanation: q.explanation || '',
+      }));
+      await supabase.from('questions').upsert(formatted);
+    } catch (e) {
+      console.warn('saveQuestions 同步提醒:', e);
+    }
   }
 };
 
-// 3. 筆記 (Notes) - 保證同步傳回 Array
+// 3. 筆記 (Notes)
 export const getNotes = () => {
   const data = getItem(KEYS.NOTES, []);
   return Array.isArray(data) ? data : [];
 };
-export const saveNotes = (notes) => {
+
+export const saveNotes = async (notes) => {
   setItem(KEYS.NOTES, notes);
   if (supabase && notes.length > 0) {
-    const latest = notes[0];
-    supabase.from('notes').upsert({
-      title: latest.title,
-      subject: latest.subject,
-      file_url: latest.fileUrl,
-      storage_path: latest.storagePath,
-    }).catch(() => {});
+    try {
+      const latest = notes[0];
+      await supabase.from('notes').upsert({
+        title: latest.title,
+        subject: latest.subject,
+        file_url: latest.fileUrl,
+        storage_path: latest.storagePath,
+      });
+    } catch (e) {
+      console.warn('saveNotes 同步提醒:', e);
+    }
   }
 };
 
-// 4. 歷史紀錄 (Quiz History) - 保證同步傳回 Array
+// 4. 歷史紀錄 (Quiz History)
 export const loadHistory = () => {
   const data = getItem(KEYS.HISTORY, []);
   return Array.isArray(data) ? data : [];
 };
 export const getQuizHistory = loadHistory;
 export const saveHistory = (h) => setItem(KEYS.HISTORY, h);
-export const saveQuizHistory = (record) => {
+
+export const saveQuizHistory = async (record) => {
   const current = loadHistory();
   saveHistory([record, ...current]);
   if (supabase) {
-    const user = getCurrentUser();
-    supabase.from('quiz_history').insert({
-      user_id: user.id,
-      subject_id: record.subjectId,
-      score: record.score,
-      total_questions: record.totalQuestions,
-      user_answers: record.userAnswers,
-    }).catch(() => {});
+    try {
+      const user = getCurrentUser();
+      await supabase.from('quiz_history').insert({
+        user_id: user.id,
+        subject_id: record.subjectId,
+        score: record.score,
+        total_questions: record.totalQuestions,
+        user_answers: record.userAnswers,
+      });
+    } catch (e) {
+      console.warn('saveQuizHistory 同步提醒:', e);
+    }
   }
 };
 
@@ -137,15 +149,19 @@ export const getCurrentUser = () => {
   return user;
 };
 
-export const saveCurrentUser = (user) => {
+export const saveCurrentUser = async (user) => {
   setItem(KEYS.CURRENT_USER, user);
   if (supabase) {
-    supabase.from('profiles').upsert({
-      id: user.id,
-      nickname: user.nickname,
-      avatar_url: user.avatarGif,
-      login_days: user.loginDays || 1,
-    }).catch(() => {});
+    try {
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        nickname: user.nickname,
+        avatar_url: user.avatarGif,
+        login_days: user.loginDays || 1,
+      });
+    } catch (e) {
+      console.warn('saveCurrentUser 同步提醒:', e);
+    }
   }
 };
 
@@ -164,16 +180,14 @@ export const registerUser = (username, password, nickname, avatarGif) => {
   return newUser;
 };
 
-export const loginUser = (username, password) => {
-  return getCurrentUser();
-};
+export const loginUser = (username, password) => getCurrentUser();
 
 // 6. 8 大成就勳章牆
 export const getUserAchievements = (historyCount = 0, perfectCount = 0) => {
   const user = getCurrentUser();
   const history = getQuizHistory();
   const hLen = historyCount || history.length;
-  const pLen = perfectCount || history.filter(h => Number(h.score) === 100).length;
+  const pLen = perfectCount || history.filter((h) => Number(h.score) === 100).length;
 
   return [
     { id: 'login_1', title: '初來乍到', desc: '成功登入並啟動刷題系統', unlocked: true, icon: '🌱' },
@@ -196,7 +210,7 @@ export const getChatMessages = () => {
   ];
 };
 
-export const sendChatMessage = (text) => {
+export const sendChatMessage = async (text) => {
   const user = getCurrentUser();
   const msgs = getChatMessages();
   const newMsg = {
@@ -210,12 +224,16 @@ export const sendChatMessage = (text) => {
   const updated = [...msgs, newMsg];
   setItem('cloud_exam_chat_messages', updated);
   if (supabase) {
-    supabase.from('chat_messages').insert({
-      user_id: user.id,
-      sender: user.nickname || '匿名學霸',
-      avatar: user.avatarGif,
-      text,
-    }).catch(() => {});
+    try {
+      await supabase.from('chat_messages').insert({
+        user_id: user.id,
+        sender: user.nickname || '匿名學霸',
+        avatar: user.avatarGif,
+        text,
+      });
+    } catch (e) {
+      console.warn('sendChatMessage 同步提醒:', e);
+    }
   }
   return updated;
 };

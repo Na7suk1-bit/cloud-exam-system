@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { getNotes, saveNotes, saveFile, deleteFile } from '../../lib/storage';
+import { getNotes, saveNotes, getSubjects, saveFile, deleteFile } from '../../lib/storage';
 import { Upload, Trash2, FileText, Plus, Loader2 } from 'lucide-react';
 
 export default function AdminNotes() {
   const [notes, setNotes] = useState([]);
+  const [subjects, setSubjects] = useState([]);
   const [title, setTitle] = useState('');
-  const [subject, setSubject] = useState('金融市場與職業道德');
+  const [subject, setSubject] = useState('');
   const [file, setFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -15,7 +16,12 @@ export default function AdminNotes() {
 
   const loadData = async () => {
     const list = await getNotes();
+    const subs = getSubjects();
     setNotes(list || []);
+    setSubjects(subs || []);
+    if (subs.length > 0) {
+      setSubject(subs[0].name);
+    }
   };
 
   const handleUpload = async (e) => {
@@ -27,7 +33,6 @@ export default function AdminNotes() {
 
     setIsUploading(true);
     try {
-      // 1. 上傳檔案 (優先 Supabase，失敗自動轉 Base64/IndexedDB 本地儲存)
       let fileUrl = '';
       let storagePath = '';
 
@@ -45,11 +50,10 @@ export default function AdminNotes() {
         storagePath = `local_${Date.now()}`;
       }
 
-      // 2. 建立筆記紀錄
       const newNote = {
         id: `note_${Date.now()}`,
         title: title.trim(),
-        subject,
+        subject: subject || (subjects[0] ? subjects[0].name : '通用科目'),
         fileUrl,
         storagePath,
         date: new Date().toLocaleDateString(),
@@ -104,21 +108,27 @@ export default function AdminNotes() {
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="如：金融市場重點考前總整理"
+              placeholder="如：投資學期中考重點整理"
               className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">對應科目</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">對應科目 (自動讀取目前設定的科目)</label>
             <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="金融市場與職業道德">金融市場與職業道德</option>
-              <option value="證券商業務員">證券商業務員</option>
-              <option value="期貨商業務員">期貨商業務員</option>
+              {subjects.length === 0 ? (
+                <option value="投資學">投資學</option>
+              ) : (
+                subjects.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
