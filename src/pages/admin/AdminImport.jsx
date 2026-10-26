@@ -19,8 +19,7 @@ export default function AdminImport() {
         throw new Error('JSON 格式必須為陣列 (Array) [ { ... }, { ... } ]');
       }
 
-      // 取得目前的科目，預設對齊第一個科目（如投資學）
-      const currentSubjects = getSubjects();
+      const currentSubjects = await getSubjects();
       const defaultSubId = currentSubjects.length > 0 ? currentSubjects[0].id : 'sub-1';
 
       const validatedQuestions = parsed.map((q, idx) => {
@@ -30,24 +29,23 @@ export default function AdminImport() {
 
         return {
           id: q.id || `q_${Date.now()}_${idx}`,
-          // 強制將 subjectId 對齊至目前有效的科目 ID
-          subjectId: defaultSubId,
+          subjectId: q.subjectId || defaultSubId,
           type: q.type || 'single',
           title: String(q.title),
           options: Array.isArray(q.options) ? q.options : [],
-          answer: Array.isArray(q.answer) ? q.answer : String(q.answer),
+          answer: Array.isArray(q.answer) ? JSON.stringify(q.answer) : String(q.answer),
           explanation: q.explanation || '',
         };
       });
 
-      // 清除舊不對齊的題目，將新題庫寫入
-      await saveQuestions(validatedQuestions);
+      // 取得現有題目並合併寫入
+      const existing = await getQuestions();
+      const updated = [...validatedQuestions, ...existing];
+      await saveQuestions(updated);
 
       setStatus({
         type: 'success',
-        message: `成功匯入 ${validatedQuestions.length} 題考題！已成功對齊並綁定至「${
-          currentSubjects[0]?.name || '預設科目'
-        }」。`,
+        message: `成功匯入 ${validatedQuestions.length} 題考題！已同步儲存至資料庫。`,
       });
       setJsonInput('');
     } catch (err) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSubjects, getQuestions, getNotes } from '../../lib/storage';
-import { BookOpen, HelpCircle, FileText, CheckCircle } from 'lucide-react';
+import { BookOpen, HelpCircle, FileText } from 'lucide-react';
 
 export default function AdminOverview() {
   const [subjects, setSubjects] = useState([]);
@@ -8,9 +8,15 @@ export default function AdminOverview() {
   const [notes, setNotes] = useState([]);
 
   useEffect(() => {
-    setSubjects(getSubjects() || []);
-    setQuestions(getQuestions() || []);
-    setNotes(getNotes() || []);
+    async function loadOverviewData() {
+      const subs = await getSubjects();
+      const qs = await getQuestions();
+      const nts = await getNotes();
+      setSubjects(subs || []);
+      setQuestions(qs || []);
+      setNotes(nts || []);
+    }
+    loadOverviewData();
   }, []);
 
   return (
