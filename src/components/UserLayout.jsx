@@ -1,46 +1,46 @@
-import React from 'react';
-import { BookOpen, ClipboardList, FileText, BarChart3 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Moon, Sun } from 'lucide-react';
 
-const NAV = [
-  { key: '', label: '開始測驗', href: '#/', icon: ClipboardList },
-  { key: 'notes', label: 'PDF 筆記', href: '#/notes', icon: FileText },
-  { key: 'history', label: '練習紀錄', href: '#/history', icon: BarChart3 },
-];
+export default function UserLayout({ children, currentTab, setCurrentTab }) {
+  const [isDark, setIsDark] = useState(
+    document.documentElement.classList.contains('dark')
+  );
 
-export default function UserLayout({ current, children }) {
-  const active = current === 'result' ? '' : current;
+  const toggleDarkMode = () => {
+    if (isDark) {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+      setIsDark(false);
+    } else {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+      setIsDark(true);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
-      <header className="bg-indigo-900 text-white sticky top-0 z-30 shadow-md">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <a href="#/" className="flex items-center gap-2.5">
-            <BookOpen className="w-6 h-6 text-amber-400" />
-            <span className="font-bold tracking-wide">線上雲端測驗與筆記系統</span>
-          </a>
-          <nav className="flex items-center gap-1">
-            {NAV.map(({ key, label, href, icon: Icon }) => (
-              <a
-                key={key}
-                href={href}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition ${
-                  active === key ? 'bg-indigo-700 text-white' : 'text-indigo-200 hover:bg-indigo-800'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{label}</span>
-              </a>
-            ))}
-          </nav>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="font-bold text-xl text-blue-600 dark:text-blue-400">
+            雲端刷題系統
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="切換黑暗模式"
+            >
+              {isDark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-600" />}
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-8">{children}</main>
-
-      <footer className="py-6 text-center text-xs text-slate-400">
-        <a href="#/admin" className="hover:text-slate-600 underline-offset-2 hover:underline">
-          管理員入口
-        </a>
-      </footer>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {children}
+      </main>
     </div>
   );
 }

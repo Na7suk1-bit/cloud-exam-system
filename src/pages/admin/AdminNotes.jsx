@@ -1,140 +1,152 @@
-import React, { useState } from 'react';
-import { Eye, FileText, Trash2, Upload } from 'lucide-react';
-import PdfViewer from '../../components/PdfViewer.jsx';
-import { putFile, deleteFile } from '../../lib/storage.js';
-import { NoSubject, PageTitle, SubjectSelect, ghostBtn, inputCls, primaryBtn } from './AdminShared.jsx';
-import { today, uid } from '../../lib/questions.js';
+import React, { useState, useEffect } from 'react';
+import { getNotes, saveNotes } from '../../lib/storage';
+import { Upload, Trash2, FileText, Plus } from 'lucide-react';
 
-const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
-
-export default function AdminNotes({ subjects, subjectId, setAdminSubjectId, updateSubject, notify }) {
-  const subject = subjects.find((s) => s.id === subjectId);
-  const [source, setSource] = useState('file'); // file | url
-  const [file, setFile] = useState(null);
-  const [url, setUrl] = useState('');
+export default function AdminNotes() {
+  const [notes, setNotes] = useState([]);
   const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [fileKey, setFileKey] = useState(0);
-  const [preview, setPreview] = useState(null);
+  const [subject, setSubject] = useState('');
+  const [fileData, setFileData] = useState('');
 
-  if (!subject) return <NoSubject />;
+  useEffect(() => {
+    setNotes(getNotes());
+  }, []);
 
-  const pick = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') {
-      notify('只能上傳 PDF 檔案', 'err');
-      setFileKey((k) => k + 1);
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setFileData(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert('請上傳格式為 PDF 的檔案');
+    }
+  };
+
+  const handleAddNote = (e) => {
+    e.preventDefault();
+    if (!title || !fileData) {
+      alert('請填寫筆記標題並上傳 PDF 檔案！');
       return;
     }
-    setFile(f);
-    if (!title) setTitle(f.name.replace(/\.pdf$/i, ''));
+
+    const newNote = {
+      id: Date.now().toString(),
+      title,
+      subject: subject || '通用筆記',
+      fileUrl: fileData,
+      date: new Date().toLocaleDateString(),
+    };
+
+    const updated = [newNote, ...notes];
+    setNotes(updated);
+    saveNotes(updated);
+
+    // 重置
+    setTitle('');
+    setSubject('');
+    setFileData('');
+    alert('PDF 筆記已成功上傳！');
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) return notify('請填寫筆記標題', 'err');
-    const base = { id: uid('n'), title: title.trim(), description: desc.trim(), date: today() };
-    setBusy(true);
-    try {
-      if (source === 'file') {
-        if (!file) return notify('請先選擇 PDF 檔案', 'err');
-        const fileId = uid('file');
-        await putFile(fileId, file);
-        updateSubject(subject.id, (s) => ({ ...s, notes: [...s.notes, { ...base, source: 'file', fileId, fileName: file.name, size: file.size }] }));
-      } else {
-        if (!/^https?:\/\//i.test(url.trim())) return notify('網址必須以 http:// 或 https:// 開頭', 'err');
-        updateSubject(subject.id, (s) => ({ ...s, notes: [...s.notes, { ...base, source: 'url', url: url.trim() }] }));
-      }
-      notify('筆記已新增');
-      setFile(null);
-      setUrl('');
-      setTitle('');
-      setDesc('');
-      setFileKey((k) => k + 1);
-    } catch {
-      notify('儲存檔案失敗，瀏覽器儲存空間可能不足', 'err');
-    } finally {
-      setBusy(false);
+  const handleDelete = (id) => {
+    if (confirm('確定要刪除這份筆記嗎？')) {
+      const updated = notes.filter((n) => n.id !== id);
+      setNotes(updated);
+      saveNotes(updated);
     }
-  };
-
-  const remove = async (n) => {
-    if (!window.confirm(`確定刪除「${n.title}」嗎？`)) return;
-    if (n.fileId) await deleteFile(n.fileId);
-    updateSubject(subject.id, (s) => ({ ...s, notes: s.notes.filter((x) => x.id !== n.id) }));
-    notify('已刪除筆記');
   };
 
   return (
-    <div>
-      <PageTitle title="PDF 筆記" desc="上傳的筆記會出現在使用者介面的「PDF 筆記」頁。">
-        <SubjectSelect subjects={subjects} value={subject.id} onChange={setAdminSubjectId} />
-      </PageTitle>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">PDF 筆記管理中心</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">上傳並管理提供給學生下載或閱讀的 PDF 檔案</p>
+      </div>
 
-      <form onSubmit={submit} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 mb-6">
-        <div className="flex gap-4 text-sm">
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> 上傳 PDF 檔
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> 使用 PDF 網址
-          </label>
+      {/* 上傳表單 */}
+      <form onSubmit={handleAddNote} className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md space-y-4">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+          <Plus className="w-5 h-5 text-blue-500" /> 上傳新筆記
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">筆記標題</label>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例如：單元一 重點總整理"
+              className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">相關科目 / 分類</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="例如：經濟學"
+              className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
         </div>
 
-        {source === 'file' ? (
-          <label className="flex items-center gap-3 border border-dashed border-slate-300 rounded-lg p-4 cursor-pointer hover:bg-slate-50 text-sm text-slate-600">
-            <Upload className="w-5 h-5 text-slate-400" />
-            {file ? (
-              <span className="text-slate-900">
-                {file.name}　<span className="text-slate-400">{fmtSize(file.size)}</span>
-              </span>
-            ) : (
-              '點擊選擇 PDF 檔案'
-            )}
-            <input key={fileKey} type="file" accept="application/pdf,.pdf" onChange={pick} className="hidden" />
-          </label>
-        ) : (
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/筆記.pdf" className={inputCls} />
-        )}
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="筆記標題" className={inputCls} />
-          <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="簡介（選填）" className={inputCls} />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">選擇 PDF 檔案</label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={handleFileUpload}
+            className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
         </div>
-        <button type="submit" disabled={busy} className={primaryBtn}>
-          {busy ? '儲存中…' : '新增筆記'}
+
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-xl transition-colors flex items-center gap-2"
+        >
+          <Upload className="w-4 h-4" /> 確認上傳
         </button>
       </form>
 
-      <div className="space-y-2">
-        {subject.notes.map((n) => (
-          <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <FileText className="w-6 h-6 text-rose-500 shrink-0" />
-              <div className="min-w-0">
-                <p className="font-medium text-slate-900 truncate">{n.title}</p>
-                <p className="text-xs text-slate-500 truncate">
-                  {n.date}・{n.fileId ? `${n.fileName || 'PDF'} ${n.size ? fmtSize(n.size) : ''}` : '外部網址'}
-                  {n.description ? `・${n.description}` : ''}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={() => setPreview(n)} className={ghostBtn} aria-label="預覽">
-                <Eye className="w-4 h-4" />
-              </button>
-              <button onClick={() => remove(n)} className={`${ghostBtn} hover:text-rose-600`} aria-label="刪除">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-        {subject.notes.length === 0 && <p className="bg-white border border-slate-200 rounded-xl p-8 text-center text-sm text-slate-500">這個科目還沒有筆記，從上方新增第一份。</p>}
-      </div>
+      {/* 筆記列表 */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md p-6">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-4">已有 PDF 筆記列表</h3>
+        {notes.length === 0 ? (
+          <p className="text-gray-500 text-sm">目前無任何筆記檔案。</p>
+        ) : (
+          <div className="space-y-3">
+            {notes.map((note) => (
+              <div
+                key={note.id}
+                className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40"
+              >
+                <div className="flex items-center gap-3">
+                  <FileText className="w-8 h-8 text-red-500" />
+                  <div>
+                    <h4 className="font-bold text-gray-900 dark:text-white">{note.title}</h4>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      科目：{note.subject} | 日期：{note.date}
+                    </span>
+                  </div>
+                </div>
 
-      {preview && <PdfViewer note={preview} onClose={() => setPreview(null)} />}
+                <button
+                  onClick={() => handleDelete(note.id)}
+                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

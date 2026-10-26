@@ -1,154 +1,190 @@
-import React, { useMemo, useState } from 'react';
-import { Zap, ClipboardCheck, Play } from 'lucide-react';
-import { shuffle, TYPE_LABEL } from '../lib/questions.js';
+import React, { useState, useEffect } from 'react';
+import { getSubjects, getQuestions } from '../lib/storage';
+import { BookOpen, Play, Settings2, Shuffle, Eye, HelpCircle } from 'lucide-react';
 
-const COUNTS = [5, 10, 20, 'all'];
+export default function Home({ onStartQuiz }) {
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  
+  // 測驗設定選項
+  const [showAnswerMode, setShowAnswerMode] = useState('immediate'); // 'immediate' (當下) 或 'after' (之後)
+  const [orderMode, setOrderMode] = useState('random'); // 'random' (隨機) 或 'sequential' (順序)
+  const [questionTypeFilter, setQuestionTypeFilter] = useState('all'); // 'all', 'choice', 'essay'
 
-const Card = ({ active, onClick, children, className = '' }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-pressed={active}
-    className={`text-left rounded-xl border p-4 transition ${
-      active ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 bg-white hover:border-slate-300'
-    } ${className}`}
-  >
-    {children}
-  </button>
-);
+  useEffect(() => {
+    const loadedSubjects = getSubjects();
+    setSubjects(loadedSubjects);
+    if (loadedSubjects.length > 0) {
+      setSelectedSubject(loadedSubjects[0].id);
+    }
+  }, []);
 
-export default function Home({ subjects, onStart }) {
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id);
-  const [mode, setMode] = useState('instant');
-  const [random, setRandom] = useState(false);
-  const [count, setCount] = useState('all');
-  const [types, setTypes] = useState({ tf: true, mc: true, essay: true });
-
-  const subject = subjects.find((s) => s.id === subjectId) || subjects[0];
-  const pool = useMemo(() => (subject?.questions || []).filter((q) => types[q.type]), [subject, types]);
-  const total = count === 'all' ? pool.length : Math.min(count, pool.length);
-
-  if (!subject) {
-    return <p className="text-center text-slate-500 py-20">目前還沒有任何科目，請等管理員建立題庫。</p>;
-  }
-
-  const typeCount = (t) => subject.questions.filter((q) => q.type === t).length;
-
-  const start = () => {
-    const list = (random ? shuffle(pool) : pool).slice(0, total);
-    onStart({ subjectId: subject.id, subjectName: subject.name, mode, questions: list });
+  const handleStart = () => {
+    if (!selectedSubject) return;
+    onStartQuiz({
+      subjectId: selectedSubject,
+      config: {
+        showAnswerMode,
+        orderMode,
+        questionTypeFilter,
+      }
+    });
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">選擇題庫與作答方式</h1>
-        <p className="text-sm text-slate-500 mt-1">設定完成後按「開始作答」，會直接進入答題畫面。</p>
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+          雲端刷題測驗系統
+        </h1>
+        <p className="text-lg text-gray-600 dark:text-gray-300">
+          選擇科目並自訂測驗模式，輕鬆進行高效複習
+        </p>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="font-semibold text-slate-700">1. 題庫</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {subjects.map((s) => (
-            <Card key={s.id} active={s.id === subject.id} onClick={() => setSubjectId(s.id)}>
-              <div className="flex items-start gap-3">
-                <span className="text-3xl leading-none">{s.icon}</span>
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900">{s.name}</p>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">{s.description}</p>
-                  <p className="text-xs text-indigo-700 mt-2">{s.questions.length} 題</p>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="font-semibold text-slate-700">2. 答題方式</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Card active={mode === 'instant'} onClick={() => setMode('instant')}>
-            <p className="font-semibold flex items-center gap-2 text-slate-900">
-              <Zap className="w-4 h-4 text-amber-500" /> 練習模式
-            </p>
-            <p className="text-xs text-slate-500 mt-1">每答一題就立刻看到對錯與解析，適合邊做邊學。</p>
-          </Card>
-          <Card active={mode === 'exam'} onClick={() => setMode('exam')}>
-            <p className="font-semibold flex items-center gap-2 text-slate-900">
-              <ClipboardCheck className="w-4 h-4 text-indigo-600" /> 模擬測驗
-            </p>
-            <p className="text-xs text-slate-500 mt-1">全部作答完交卷後才公布成績，並逐題檢討。</p>
-          </Card>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-100 dark:border-gray-700 space-y-6 transition-colors">
+        {/* 科目選擇 */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-blue-500" />
+            選擇考試科目
+          </label>
+          <select
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+          >
+            {subjects.map((sub) => (
+              <option key={sub.id} value={sub.id}>
+                {sub.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 grid gap-5 sm:grid-cols-3">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 mb-2">出題順序</p>
-            <div className="flex gap-2">
-              {[
-                [false, '照順序'],
-                [true, '隨機'],
-              ].map(([v, label]) => (
-                <button
-                  key={label}
-                  onClick={() => setRandom(v)}
-                  className={`px-3 py-1.5 rounded-lg text-sm border ${
-                    random === v ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-500 mb-2">題數</p>
-            <div className="flex flex-wrap gap-2">
-              {COUNTS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCount(c)}
-                  className={`px-3 py-1.5 rounded-lg text-sm border ${
-                    count === c ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {c === 'all' ? '全部' : c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-500 mb-2">題型</p>
-            <div className="space-y-1.5">
-              {Object.keys(TYPE_LABEL).map((t) => (
-                <label key={t} className="flex items-center gap-2 text-sm text-slate-700">
+        <hr className="border-gray-200 dark:border-gray-700" />
+
+        {/* 測驗模式設定 */}
+        <div className="space-y-4">
+          <h3 className="text-md font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <Settings2 className="w-5 h-5 text-blue-500" />
+            測驗模式設定
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 1. 答案展示 */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-2">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 block uppercase">
+                1. 答案顯示時機
+              </span>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   <input
-                    type="checkbox"
-                    checked={types[t]}
-                    disabled={typeCount(t) === 0}
-                    onChange={(e) => setTypes((p) => ({ ...p, [t]: e.target.checked }))}
-                    className="rounded border-slate-300"
+                    type="radio"
+                    name="showAnswerMode"
+                    value="immediate"
+                    checked={showAnswerMode === 'immediate'}
+                    onChange={(e) => setShowAnswerMode(e.target.value)}
+                    className="text-blue-600"
                   />
-                  {TYPE_LABEL[t]}
-                  <span className="text-xs text-slate-400">{typeCount(t)}</span>
+                  當下顯示解析
                 </label>
-              ))}
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="showAnswerMode"
+                    value="after"
+                    checked={showAnswerMode === 'after'}
+                    onChange={(e) => setShowAnswerMode(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  交卷後統一顯示
+                </label>
+              </div>
+            </div>
+
+            {/* 2. 出題順序 */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-2">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 block uppercase">
+                2. 出題順序
+              </span>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="orderMode"
+                    value="random"
+                    checked={orderMode === 'random'}
+                    onChange={(e) => setOrderMode(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  隨機抽題
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="orderMode"
+                    value="sequential"
+                    checked={orderMode === 'sequential'}
+                    onChange={(e) => setOrderMode(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  依序出題
+                </label>
+              </div>
+            </div>
+
+            {/* 3. 題型選擇 */}
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-2">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 block uppercase">
+                3. 題型篩選
+              </span>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="questionTypeFilter"
+                    value="all"
+                    checked={questionTypeFilter === 'all'}
+                    onChange={(e) => setQuestionTypeFilter(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  包含全部題型
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="questionTypeFilter"
+                    value="choice"
+                    checked={questionTypeFilter === 'choice'}
+                    onChange={(e) => setQuestionTypeFilter(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  僅選擇題
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="questionTypeFilter"
+                    value="essay"
+                    checked={questionTypeFilter === 'essay'}
+                    onChange={(e) => setQuestionTypeFilter(e.target.value)}
+                    className="text-blue-600"
+                  />
+                  僅申論/計算題
+                </label>
+              </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <div className="flex items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl p-4">
-        <p className="text-sm text-slate-600">
-          {subject.icon} {subject.name}・{mode === 'instant' ? '練習模式' : '模擬測驗'}・
-          <span className="font-semibold text-slate-900">{total} 題</span>
-        </p>
         <button
-          onClick={start}
-          disabled={total === 0}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-medium px-6 py-2.5 rounded-lg transition"
+          onClick={handleStart}
+          disabled={!selectedSubject}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 text-lg shadow-lg shadow-blue-500/20"
         >
-          <Play className="w-4 h-4" /> 開始作答
+          <Play className="w-5 h-5 fill-current" />
+          開始測驗
         </button>
       </div>
     </div>
