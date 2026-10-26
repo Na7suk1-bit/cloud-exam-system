@@ -20,6 +20,7 @@ const generateRandomUserId = () => {
   return `user_${randomStr}`;
 };
 
+// 輔助：讀取與寫入 LocalStorage
 const getItem = (key, fallback) => {
   try {
     const item = localStorage.getItem(key);
@@ -35,10 +36,23 @@ const setItem = (key, value) => {
   } catch (e) {}
 };
 
-// 1. 科目 (Subjects) - 清空舊預設，純動態讀取
-export const getSubjects = () => {
-  const data = getItem(KEYS.SUBJECTS, []);
-  return Array.isArray(data) ? data : [];
+// ==========================================
+// 1. 科目管理 (Subjects)
+// ==========================================
+export const getSubjects = async () => {
+  // 優先從 Supabase 讀取
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('subjects').select('*').order('created_at', { ascending: true });
+      if (!error && data) {
+        setItem(KEYS.SUBJECTS, data); // 覆蓋本地快取
+        return data;
+      }
+    } catch (e) {
+      console.warn('Supabase 讀取科目失敗，切換至本地快取:', e);
+    }
+  }
+  return getItem(KEYS.SUBJECTS, []);
 };
 export const loadSubjects = getSubjects;
 
@@ -50,15 +64,37 @@ export const saveSubjects = async (subs) => {
         await supabase.from('subjects').upsert({ id: s.id, name: s.name });
       }
     } catch (e) {
-      console.warn('saveSubjects 同步提醒:', e);
+      console.error('saveSubjects 上傳失敗:', e);
     }
   }
 };
 
-// 2. 題目 (Questions) - 預設為 0
-export const getQuestions = () => {
-  const data = getItem(KEYS.QUESTIONS, []);
-  return Array.isArray(data) ? data : [];
+// ==========================================
+// 2. 題目管理 (Questions)
+// ==========================================
+export const getQuestions = async () => {
+  // 優先從 Supabase 讀取
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('questions').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        const formatted = data.map((q) => ({
+          id: q.id,
+          subjectId: q.subject_id,
+          type: q.type,
+          title: q.title,
+          options: typeof q.options === 'string' ? JSON.parse(q.options) : (q.options || []),
+          answer: typeof q.answer === 'string' && q.answer.startsWith('[') ? JSON.parse(q.answer) : q.answer,
+          explanation: q.explanation || '',
+        }));
+        setItem(KEYS.QUESTIONS, formatted); // 覆蓋本地快取
+        return formatted;
+      }
+    } catch (e) {
+      console.warn('Supabase 讀取題目失敗，切換至本地快取:', e);
+    }
+  }
+  return getItem(KEYS.QUESTIONS, []);
 };
 
 export const saveQuestions = async (qs) => {
@@ -74,17 +110,38 @@ export const saveQuestions = async (qs) => {
         answer: Array.isArray(q.answer) ? JSON.stringify(q.answer) : String(q.answer),
         explanation: q.explanation || '',
       }));
-      await supabase.from('questions').upsert(formatted);
+      const { error } = await supabase.from('questions').upsert(formatted);
+      if (error) console.error('Supabase 寫入題目報錯:', error);
     } catch (e) {
-      console.warn('saveQuestions 同步提醒:', e);
+      console.error('saveQuestions 異常:', e);
     }
   }
 };
 
-// 3. 筆記 (Notes)
-export const getNotes = () => {
-  const data = getItem(KEYS.NOTES, []);
-  return Array.isArray(data) ? data : [];
+// ==========================================
+// 3. PDF 筆記管理 (Notes)
+// ==========================================
+export const getNotes = async () => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        const formatted = data.map((n) => ({
+          id: n.id,
+          title: n.title,
+          subject: n.subject,
+          fileUrl: n.file_url,
+          storagePath: n.storage_path,
+          date: new Date(n.created_at || Date.now()).toLocaleDateString(),
+        }));
+        setItem(KEYS.NOTES, formatted);
+        return formatted;
+      }
+    } catch (e) {
+      console.warn('Supabase 讀取筆記失敗:', e);
+    }
+  }
+  return getItem(KEYS.NOTES, []);
 };
 
 export const saveNotes = async (notes) => {
@@ -92,23 +149,23 @@ export const saveNotes = async (notes) => {
   if (supabase && notes.length > 0) {
     try {
       const latest = notes[0];
-      await supabase.from('notes').upsert({
+      const { error } = await supabase.from('notes').upsert({
         title: latest.title,
         subject: latest.subject,
         file_url: latest.fileUrl,
         storage_path: latest.storagePath,
       });
+      if (error) console.error('Supabase 寫入筆記報錯:', error);
     } catch (e) {
-      console.warn('saveNotes 同步提醒:', e);
+      console.error('saveNotes 異常:', e);
     }
   }
 };
 
-// 4. 歷史紀錄 (Quiz History)
-export const loadHistory = () => {
-  const data = getItem(KEYS.HISTORY, []);
-  return Array.isArray(data) ? data : [];
-};
+// ==========================================
+// 4. 歷史紀錄 & 使用者 Profile
+// ==========================================
+export const loadHistory = () => getItem(KEYS.HISTORY, []);
 export const getQuizHistory = loadHistory;
 export const saveHistory = (h) => setItem(KEYS.HISTORY, h);
 
@@ -125,13 +182,10 @@ export const saveQuizHistory = async (record) => {
         total_questions: record.totalQuestions,
         user_answers: record.userAnswers,
       });
-    } catch (e) {
-      console.warn('saveQuizHistory 同步提醒:', e);
-    }
+    } catch (e) {}
   }
 };
 
-// 5. 使用者與個人檔案
 export const getCurrentUser = () => {
   let user = getItem(KEYS.CURRENT_USER, null);
   if (!user) {
@@ -159,9 +213,7 @@ export const saveCurrentUser = async (user) => {
         avatar_url: user.avatarGif,
         login_days: user.loginDays || 1,
       });
-    } catch (e) {
-      console.warn('saveCurrentUser 同步提醒:', e);
-    }
+    } catch (e) {}
   }
 };
 
@@ -182,7 +234,6 @@ export const registerUser = (username, password, nickname, avatarGif) => {
 
 export const loginUser = (username, password) => getCurrentUser();
 
-// 6. 8 大成就勳章牆
 export const getUserAchievements = (historyCount = 0, perfectCount = 0) => {
   const user = getCurrentUser();
   const history = getQuizHistory();
@@ -201,18 +252,41 @@ export const getUserAchievements = (historyCount = 0, perfectCount = 0) => {
   ];
 };
 
-// 7. 聊天室數據
-export const getChatMessages = () => {
-  const data = getItem('cloud_exam_chat_messages', null);
-  if (data && Array.isArray(data) && data.length > 0) return data;
-  return [
+export const getChatMessages = async () => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(50);
+      if (!error && data) {
+        return data.map((m) => ({
+          id: m.id,
+          sender: m.sender,
+          userId: m.user_id,
+          avatar: m.avatar,
+          text: m.text,
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
+      }
+    } catch (e) {}
+  }
+  return getItem('cloud_exam_chat_messages', [
     { id: 'm1', sender: '系統助手', text: '歡迎來到在線刷題聊天室！大家可以自由交流複習心得。', time: '12:00', avatar: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZydWl5cmZwMncyeHZwNDRia3p4c2JidnpteWVvNmVrc3B6eDJ1ZyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26fb8z8D5v0M9N5zW/giphy.gif' }
-  ];
+  ]);
 };
 
 export const sendChatMessage = async (text) => {
   const user = getCurrentUser();
-  const msgs = getChatMessages();
+  if (supabase) {
+    try {
+      await supabase.from('chat_messages').insert({
+        user_id: user.id,
+        sender: user.nickname || '匿名學霸',
+        avatar: user.avatarGif,
+        text,
+      });
+      return await getChatMessages();
+    } catch (e) {}
+  }
+  const msgs = getItem('cloud_exam_chat_messages', []);
   const newMsg = {
     id: `msg_${Date.now()}`,
     sender: user.nickname || '匿名學霸',
@@ -223,22 +297,9 @@ export const sendChatMessage = async (text) => {
   };
   const updated = [...msgs, newMsg];
   setItem('cloud_exam_chat_messages', updated);
-  if (supabase) {
-    try {
-      await supabase.from('chat_messages').insert({
-        user_id: user.id,
-        sender: user.nickname || '匿名學霸',
-        avatar: user.avatarGif,
-        text,
-      });
-    } catch (e) {
-      console.warn('sendChatMessage 同步提醒:', e);
-    }
-  }
   return updated;
 };
 
-// 8. 管理者權限
 export const loadAdmin = () => getItem(KEYS.ADMIN, false);
 export const saveAdmin = (isAdmin) => setItem(KEYS.ADMIN, isAdmin);
 export const loadSession = () => getItem(KEYS.SESSION, null);
@@ -252,8 +313,7 @@ export function useAuth() {
   };
 }
 
-// 9. 檔案處理相容介面
-export const saveFile = async (idOrFile, base64Data) => {
+export const saveFile = async (idOrFile) => {
   if (idOrFile instanceof File) {
     return await uploadPdfToCloud(idOrFile);
   }
