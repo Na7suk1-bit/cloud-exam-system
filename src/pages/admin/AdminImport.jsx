@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getQuestions, saveQuestions } from '../../lib/storage';
+import { getQuestions, saveQuestions, getSubjects } from '../../lib/storage';
 import { FileCode, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function AdminImport() {
@@ -15,12 +15,14 @@ export default function AdminImport() {
 
     try {
       const parsed = JSON.parse(jsonInput.trim());
-
       if (!Array.isArray(parsed)) {
         throw new Error('JSON 格式必須為陣列 (Array) [ { ... }, { ... } ]');
       }
 
-      // 相容性檢查與結構轉換
+      // 取得目前的科目，預設對齊第一個科目（如投資學）
+      const currentSubjects = getSubjects();
+      const defaultSubId = currentSubjects.length > 0 ? currentSubjects[0].id : 'sub-1';
+
       const validatedQuestions = parsed.map((q, idx) => {
         if (!q.title || q.answer === undefined) {
           throw new Error(`第 ${idx + 1} 題缺少 title (題目) 或 answer (答案)`);
@@ -28,7 +30,8 @@ export default function AdminImport() {
 
         return {
           id: q.id || `q_${Date.now()}_${idx}`,
-          subjectId: q.subjectId || 'sub-1',
+          // 強制將 subjectId 對齊至目前有效的科目 ID
+          subjectId: defaultSubId,
           type: q.type || 'single',
           title: String(q.title),
           options: Array.isArray(q.options) ? q.options : [],
@@ -37,14 +40,14 @@ export default function AdminImport() {
         };
       });
 
-      const currentQuestions = await getQuestions();
-      const updated = [...validatedQuestions, ...currentQuestions];
-
-      await saveQuestions(updated);
+      // 清除舊不對齊的題目，將新題庫寫入
+      await saveQuestions(validatedQuestions);
 
       setStatus({
         type: 'success',
-        message: `成功匯入 ${validatedQuestions.length} 題考題！已同步至題庫庫存。`,
+        message: `成功匯入 ${validatedQuestions.length} 題考題！已成功對齊並綁定至「${
+          currentSubjects[0]?.name || '預設科目'
+        }」。`,
       });
       setJsonInput('');
     } catch (err) {

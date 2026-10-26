@@ -15,7 +15,7 @@ export default function AdminNotes() {
   }, []);
 
   const loadData = async () => {
-    const list = await getNotes();
+    const list = getNotes();
     const subs = getSubjects();
     setNotes(list || []);
     setSubjects(subs || []);
@@ -33,21 +33,25 @@ export default function AdminNotes() {
 
     setIsUploading(true);
     try {
-      let fileUrl = '';
-      let storagePath = '';
+      // 讀取檔案成為本地 DataURL 以防線上連線存取阻擋
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-      const uploaded = await saveFile(file);
-      if (typeof uploaded === 'object' && uploaded.fileUrl) {
-        fileUrl = uploaded.fileUrl;
-        storagePath = uploaded.storagePath || '';
-      } else {
-        fileUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        storagePath = `local_${Date.now()}`;
+      let fileUrl = base64Data;
+      let storagePath = `note_${Date.now()}`;
+
+      try {
+        const uploaded = await saveFile(file);
+        if (typeof uploaded === 'object' && uploaded.fileUrl) {
+          fileUrl = uploaded.fileUrl;
+          storagePath = uploaded.storagePath || storagePath;
+        }
+      } catch (err) {
+        console.warn('雲端上傳備援中:', err);
       }
 
       const newNote = {
@@ -114,7 +118,7 @@ export default function AdminNotes() {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">對應科目 (自動讀取目前設定的科目)</label>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">對應科目</label>
             <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
